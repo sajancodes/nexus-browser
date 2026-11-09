@@ -32,7 +32,7 @@ namespace {
 
 constexpr int kInitialWindowWidth = 1280;
 constexpr int kInitialWindowHeight = 800;
-constexpr int kShellHeight = 88;
+constexpr int kShellHeight = 114;
 constexpr cef_color_t kWindowBackground = 0xFF111315;
 
 constexpr int kCommandFocusAddress = 1001;
@@ -1003,8 +1003,10 @@ void BrowserWindow::LayoutViews() {
 
   if (dashboard_open_) {
     shell_view_->SetBounds(CefRect(0, 0, width, height));
-    if (window_) {
-      window_->Layout();
+    for (Tab& tab : tabs_) {
+      if (tab.view) {
+        tab.view->SetBounds(CefRect(0, height, width, 0));
+      }
     }
     return;
   }
@@ -1017,9 +1019,6 @@ void BrowserWindow::LayoutViews() {
     if (tab.view) {
       tab.view->SetBounds(CefRect(0, shell_height, width, content_height));
     }
-  }
-  if (window_) {
-    window_->Layout();
   }
 }
 

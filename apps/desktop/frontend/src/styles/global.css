@@ -71,7 +71,7 @@ svg.icon {
 .chrome {
   display: flex;
   flex-direction: column;
-  height: 88px;
+  height: 114px;
   background: var(--nexus-bg);
   border-bottom: 1px solid var(--nexus-border);
   user-select: none;
@@ -389,7 +389,7 @@ svg.icon {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  height: 88px;
+  height: 114px;
   padding: 0 18px;
   background: var(--nexus-bg);
   color: var(--nexus-text-muted);
@@ -1235,7 +1235,7 @@ svg.icon {
 
 .drawer-overlay {
   position: fixed;
-  inset: 88px 0 0 0;
+  inset: 114px 0 0 0;
   z-index: 150;
   display: flex;
   justify-content: flex-end;

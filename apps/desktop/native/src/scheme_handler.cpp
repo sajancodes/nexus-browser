@@ -14,14 +14,14 @@ namespace nexus {
 namespace {
 
 constexpr char kShellCsp[] =
-    "default-src 'none'; script-src 'self'; style-src 'self'; "
+    "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; font-src 'self'; connect-src 'none'; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
     "object-src 'none'";
 
 constexpr char kNewTabCsp[] =
-    "default-src 'none'; script-src 'self'; style-src 'self'; "
-    "img-src 'none'; font-src 'self'; connect-src 'none'; base-uri 'none'; "
+    "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; "
     "form-action https://duckduckgo.com; frame-ancestors 'none'; "
     "object-src 'none'";
 
@@ -29,8 +29,12 @@ constexpr char kPermissionsPolicy[] =
     "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
     "serial=(), hid=(), midi=(), clipboard-read=(), clipboard-write=()";
 
-CefResponse::HeaderMap BuildHeaders(const std::string& host) {
+CefResponse::HeaderMap BuildHeaders(const std::string& host,
+                                    const std::string& mime_type) {
   CefResponse::HeaderMap headers;
+  if (!mime_type.empty()) {
+    headers.emplace("Content-Type", mime_type);
+  }
   headers.emplace("Content-Security-Policy",
                   host == "newtab" ? kNewTabCsp : kShellCsp);
   headers.emplace("X-Content-Type-Options", "nosniff");
@@ -63,7 +67,12 @@ class MemoryResourceHandler final : public CefResourceHandler {
     response->SetStatus(asset_.status);
     response->SetStatusText(CefString(asset_.status_text));
     response->SetMimeType(CefString(asset_.mime_type));
-    response->SetHeaderMap(headers_);
+
+    CefResponse::HeaderMap headers = headers_;
+    if (!asset_.mime_type.empty() && headers.find("Content-Type") == headers.end()) {
+      headers.emplace("Content-Type", asset_.mime_type);
+    }
+    response->SetHeaderMap(headers);
     response_length = static_cast<int64_t>(asset_.body.size());
   }
 
@@ -118,7 +127,8 @@ CefRefPtr<CefResourceHandler> MakeErrorResponse(int status,
   asset.status_text = status_text;
   asset.mime_type = "text/plain; charset=utf-8";
   asset.body = message;
-  return new MemoryResourceHandler(std::move(asset), BuildHeaders(host));
+  const std::string mime = asset.mime_type;
+  return new MemoryResourceHandler(std::move(asset), BuildHeaders(host, mime));
 }
 
 }  // namespace
@@ -151,7 +161,8 @@ CefRefPtr<CefResourceHandler> NexusSchemeHandlerFactory::Create(
   const std::string host = CefString(&parts.host).ToString();
   const std::string path = CefString(&parts.path).ToString();
   AssetResponse asset = store_->Load(host, path, method == "HEAD");
-  return new MemoryResourceHandler(std::move(asset), BuildHeaders(host));
+  const std::string mime = asset.mime_type;
+  return new MemoryResourceHandler(std::move(asset), BuildHeaders(host, mime));
 }
 
 }  // namespace nexus
