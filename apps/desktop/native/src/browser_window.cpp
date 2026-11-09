@@ -33,6 +33,7 @@ namespace {
 
 constexpr int kInitialWindowWidth = 1280;
 constexpr int kInitialWindowHeight = 800;
+constexpr int kShellHeight = 88;
 constexpr cef_color_t kWindowBackground = 0xFF111315;
 
 constexpr int kCommandFocusAddress = 1001;
@@ -160,16 +161,15 @@ void BrowserWindow::OnWindowCreated(CefRefPtr<CefWindow> window) {
   const std::string start_url =
       initial_url_.empty() ? std::string(kNewTabUrl) : initial_url_;
   CreateTab(start_url, true);
-  std::fprintf(stderr, "NEXUS OnWindowCreated: shell_view=%p tabs=%zu active=%d start_url=%s\n",
-               static_cast<void*>(shell_view_.get()), tabs_.size(),
-               active_tab_id_, start_url.c_str());
+  std::fprintf(stderr, "NEXUS OnWindowCreated: tabs=%zu active=%d start_url=%s\n",
+               tabs_.size(), active_tab_id_, start_url.c_str());
   std::fflush(stderr);
   LayoutViews();
 }
 
 void BrowserWindow::OnWindowDestroyed(CefRefPtr<CefWindow> /*window*/) {
   CEF_REQUIRE_UI_THREAD();
-  std::fprintf(stderr, "NEXUS OnWindowDestroyed\\n");
+  std::fprintf(stderr, "NEXUS OnWindowDestroyed\n");
   std::fflush(stderr);
   shell_loaded_ = false;
   native_chrome_ = nullptr;
@@ -1048,9 +1048,22 @@ bool BrowserWindow::EnsureReactInterface() {
 
 void BrowserWindow::SyncNativeChrome() {
   if (!native_chrome_) return;
+  std::vector<NativeChrome::TabSummary> summaries;
+  summaries.reserve(tabs_.size());
+  for (const Tab& tab : tabs_) {
+    summaries.push_back({
+        tab.id,
+        tab.title,
+        tab.url,
+        tab.id == active_tab_id_,
+        tab.loading,
+    });
+  }
   const Tab* tab = FindTab(active_tab_id_);
-  native_chrome_->Sync(tab ? tab->url : std::string(), tab && tab->loading,
-                       tab && tab->can_go_back, tab && tab->can_go_forward);
+  native_chrome_->Sync(summaries, tab ? tab->url : std::string(),
+                       tab && tab->loading,
+                       tab && tab->can_go_back,
+                       tab && tab->can_go_forward);
 }
 
 void BrowserWindow::UpdateWindowTitle() {
