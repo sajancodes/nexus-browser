@@ -175,3 +175,66 @@ export function SearchIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function StarIcon({ className, filled }: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      {...base}
+      className={className ?? 'icon'}
+      fill={filled ? 'currentColor' : 'none'}
+    >
+      <polygon points="8,1.5 10,5.8 14.5,6.3 11,9.6 12,14.2 8,11.8 4,14.2 5,9.6 1.5,6.3 6,5.8" />
+    </svg>
+  );
+}
+
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className ?? 'icon'}>
+      <circle cx="8" cy="8" r="5.7" />
+      <polyline points="8 4.5 8 8 10.5 9.5" />
+    </svg>
+  );
+}
+
+export function FilmIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className ?? 'icon'}>
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <line x1="2" y1="6.5" x2="14" y2="6.5" />
+      <line x1="2" y1="9.5" x2="14" y2="9.5" />
+      <line x1="5.5" y1="3" x2="5.5" y2="6.5" />
+      <line x1="10.5" y1="3" x2="10.5" y2="6.5" />
+      <line x1="5.5" y1="9.5" x2="5.5" y2="13" />
+      <line x1="10.5" y1="9.5" x2="10.5" y2="13" />
+    </svg>
+  );
+}
+
+export function VpnIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className ?? 'icon'}>
+      <rect x="2" y="5.5" width="12" height="7.5" rx="1.8" />
+      <circle cx="8" cy="9.2" r="1.2" />
+      <path d="M5.5 5.5V3.8a2.5 2.5 0 0 1 5 0v1.7" />
+    </svg>
+  );
+}
+
+export function GearIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className ?? 'icon'}>
+      <circle cx="8" cy="8" r="2.5" />
+      <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" />
+    </svg>
+  );
+}
+
+export function FolderIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className ?? 'icon'}>
+      <path d="M2 4.2C2 3.5 2.5 3 3.2 3h3.1c.4 0 .7.2.9.5l.8 1.2c.2.3.5.5.9.5h3.9c.7 0 1.2.5 1.2 1.2v6.4c0 .7-.5 1.2-1.2 1.2H3.2C2.5 14 2 13.5 2 12.8V4.2Z" />
+    </svg>
+  );
+}
+

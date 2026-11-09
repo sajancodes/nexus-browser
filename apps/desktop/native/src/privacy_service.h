@@ -9,6 +9,7 @@
 #include "include/cef_base.h"
 #include "include/cef_cookie.h"
 #include "include/cef_request.h"
+#include "src/privacy/filter_engine.h"
 
 namespace nexus {
 
@@ -41,6 +42,20 @@ class PrivacyService final : public CefBaseRefCounted {
   bool ShouldAllowCookie(CefRefPtr<CefRequest> request,
                          const CefCookie& cookie);
 
+  // Called from CefResourceRequestHandler on the IO thread to filter network trackers and ads.
+  bool ShouldBlockRequest(std::string_view url, std::string_view initiator_host) {
+    if (filter_engine_.ShouldBlock(url, initiator_host)) {
+      RecordBlockedTracker();
+      return true;
+    }
+    return false;
+  }
+
+  privacy::FilterEngine* filter_engine() { return &filter_engine_; }
+
+  void RecordBlockedTracker() {
+    blocked_trackers_.fetch_add(1, std::memory_order_relaxed);
+  }
   void RecordBlockedCookie() {
     blocked_cookies_.fetch_add(1, std::memory_order_relaxed);
   }
@@ -66,6 +81,9 @@ class PrivacyService final : public CefBaseRefCounted {
     }
   }
 
+  uint64_t blocked_trackers() const {
+    return blocked_trackers_.load(std::memory_order_relaxed);
+  }
   uint64_t blocked_cookies() const {
     return blocked_cookies_.load(std::memory_order_relaxed);
   }
@@ -92,7 +110,9 @@ class PrivacyService final : public CefBaseRefCounted {
   void SavePreferences();
 
   std::filesystem::path preferences_path_;
+  privacy::FilterEngine filter_engine_;
   std::atomic<int> mode_{static_cast<int>(CookieMode::kStrict)};
+  std::atomic<uint64_t> blocked_trackers_{0};
   std::atomic<uint64_t> blocked_cookies_{0};
   std::atomic<uint64_t> denied_permissions_{0};
   std::atomic<uint64_t> blocked_downloads_{0};

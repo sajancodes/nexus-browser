@@ -7,6 +7,9 @@
 
 #include "core/data_paths.h"
 #include "core/url_utils.h"
+#include "db/database.h"
+#include "privacy/filter_engine.h"
+#include "vpn/vpn_manager.h"
 
 namespace {
 
@@ -203,12 +206,116 @@ void TestDataPaths() {
   CHECK(!cleanup_error);
 }
 
+void TestFilterEngine() {
+  using nexus::privacy::FilterEngine;
+  FilterEngine engine;
+
+  // Tracker domains
+  CHECK(engine.ShouldBlock("https://www.google-analytics.com/analytics.js", "example.com"));
+  CHECK(engine.ShouldBlock("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js", "example.com"));
+  CHECK(engine.ShouldBlock("https://connect.facebook.net/en_US/fbevents.js", "example.com"));
+  CHECK(engine.ShouldBlock("https://c.amazon-adsystem.com/aax2/apstag.js", "example.com"));
+  CHECK(engine.ShouldBlock("https://pixel.rubiconproject.com/tap.php", "example.com"));
+  CHECK(engine.ShouldBlock("https://secure.quantserve.com/quant.js", "example.com"));
+  CHECK(engine.ShouldBlock("https://cdn.taboola.com/libtrc/loader.js", "example.com"));
+  CHECK(engine.ShouldBlock("https://outbrain.com/widget", "example.com"));
+
+  // Common tracking substrings
+  CHECK(engine.ShouldBlock("https://example.com/api/telemetry/report", "example.com"));
+  CHECK(engine.ShouldBlock("https://example.com/collect/beacon?user=1", "example.com"));
+  CHECK(engine.ShouldBlock("https://example.com/adserver/banner.png", "example.com"));
+
+  // Legitimate requests that should pass
+  CHECK(!engine.ShouldBlock("https://example.com/index.html", "example.com"));
+  CHECK(!engine.ShouldBlock("https://en.wikipedia.org/wiki/Main_Page", "en.wikipedia.org"));
+  CHECK(!engine.ShouldBlock("https://duckduckgo.com/", "duckduckgo.com"));
+  CHECK(!engine.ShouldBlock("https://github.com/sajancodes/nexus-browser", "github.com"));
+}
+
+void TestVpnConfigParsing() {
+  using nexus::vpn::VpnManager;
+
+  const std::string valid_conf =
+      "[Interface]\n"
+      "PrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=\n"
+      "Address = 10.0.0.2/32\n"
+      "DNS = 1.1.1.1, 1.0.0.1\n"
+      "\n"
+      "[Peer]\n"
+      "PublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=\n"
+      "Endpoint = 198.51.100.1:51820\n"
+      "AllowedIPs = 0.0.0.0/0\n";
+
+  std::string iface, endpoint, dns;
+  bool ok = VpnManager::ParseConfig(valid_conf, &iface, &endpoint, &dns);
+  CHECK(ok);
+  CHECK(iface == "10.0.0.2/32");
+  CHECK(dns == "1.1.1.1, 1.0.0.1");
+  CHECK(endpoint == "198.51.100.1:51820");
+
+  const std::string invalid_conf = "This is not a wireguard configuration";
+  bool invalid_ok = VpnManager::ParseConfig(invalid_conf, &iface, &endpoint, &dns);
+  CHECK(!invalid_ok);
+}
+
+void TestDatabaseOperations() {
+  using nexus::db::Database;
+  const std::filesystem::path temp_dir =
+      std::filesystem::temp_directory_path() /
+      (L"nexus-db-test-" +
+       std::to_wstring(static_cast<unsigned long long>(GetTickCount64())));
+  std::filesystem::create_directories(temp_dir);
+
+  const std::filesystem::path db_file = temp_dir / L"test_nexus.db";
+  {
+    Database db;
+    CHECK(db.Open(db_file));
+    CHECK(db.IsOpen());
+
+    // History operations
+    CHECK(db.AddHistory("https://example.com/test", "Test Page"));
+    auto recent = db.GetHistory(10);
+    CHECK(!recent.empty());
+    CHECK(recent[0].url == "https://example.com/test");
+    CHECK(recent[0].title == "Test Page");
+
+    auto ac = db.SearchAutocomplete("example", 5);
+    CHECK(!ac.empty());
+    CHECK(ac[0].url == "https://example.com/test");
+
+    // Bookmark operations
+    CHECK(!db.IsBookmarked("https://example.com/bookmark"));
+    CHECK(db.AddBookmark("https://example.com/bookmark", "Saved Bookmark"));
+    CHECK(db.IsBookmarked("https://example.com/bookmark"));
+    auto bookmarks = db.GetBookmarks();
+    CHECK(bookmarks.size() == 1);
+    CHECK(bookmarks[0].title == "Saved Bookmark");
+    CHECK(db.RemoveBookmark("https://example.com/bookmark"));
+    CHECK(!db.IsBookmarked("https://example.com/bookmark"));
+
+    // Settings operations
+    CHECK(db.SetSetting("test_key", "test_value_123"));
+    CHECK(db.GetSetting("test_key") == "test_value_123");
+    CHECK(db.GetSetting("non_existent", "default_val") == "default_val");
+
+    db.Close();
+  }
+
+  // Clean up
+  std::error_code ec;
+  std::filesystem::remove_all(temp_dir, ec);
+  CHECK(!ec);
+}
+
 }  // namespace
 
 int main() {
   TestNavigationResolution();
   TestUrlPolicy();
   TestDataPaths();
+  TestFilterEngine();
+  TestVpnConfigParsing();
+  TestDatabaseOperations();
 
   if (g_failures == 0) {
     std::cout << "nexus_core_tests: all checks passed\n";

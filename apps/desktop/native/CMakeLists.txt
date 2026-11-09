@@ -8,23 +8,38 @@ target_include_directories(nexus_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(nexus_core PUBLIC shell32.lib ole32.lib)
 target_compile_options(nexus_core PRIVATE /W4 /WX /utf-8 /EHsc)
 
+add_library(nexus_sqlite STATIC "${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/sqlite/sqlite3.c")
+target_include_directories(nexus_sqlite PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/sqlite")
+target_compile_definitions(nexus_sqlite PRIVATE
+  SQLITE_THREADSAFE=1
+  SQLITE_ENABLE_FTS5
+  SQLITE_ENABLE_JSON1
+  SQLITE_ENABLE_RTREE
+  SQLITE_DEFAULT_MEMSTATUS=0
+  SQLITE_OMIT_DEPRECATED
+)
+target_compile_options(nexus_sqlite PRIVATE /W3)
+
 set(NEXUS_NATIVE_SOURCES
   src/app.cpp
   src/asset_store.cpp
   src/browser_window.cpp
   src/content_client.cpp
+  src/db/database.cpp
   src/ipc_router.cpp
   src/main.cpp
+  src/privacy/filter_engine.cpp
   src/privacy_service.cpp
   src/render_process_handler.cpp
   src/scheme_handler.cpp
   src/settings.cpp
   src/shell_client.cpp
+  src/vpn/vpn_manager.cpp
 )
 
 add_library(nexus SHARED ${NEXUS_NATIVE_SOURCES})
 SET_LIBRARY_TARGET_PROPERTIES(nexus)
-target_include_directories(nexus PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(nexus PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
 target_compile_options(nexus PRIVATE /W4 /WX /utf-8 /EHsc)
 target_compile_definitions(nexus PRIVATE NEXUS_VERSION="${PROJECT_VERSION}")
 
@@ -35,6 +50,7 @@ ADD_LOGICAL_TARGET(libcef_lib "${CEF_LIB_DEBUG}" "${CEF_LIB_RELEASE}")
 add_dependencies(nexus libcef_dll_wrapper)
 target_link_libraries(nexus PRIVATE
   nexus_core
+  nexus_sqlite
   libcef_lib
   libcef_dll_wrapper
   ${CEF_STANDARD_LIBS}
@@ -99,8 +115,18 @@ else()
 endif()
 
 # Native unit tests (no CEF message loop required).
-add_executable(nexus_core_tests tests/core_tests.cpp)
-target_link_libraries(nexus_core_tests PRIVATE nexus_core)
+add_executable(nexus_core_tests
+  tests/core_tests.cpp
+  src/privacy/filter_engine.cpp
+  src/vpn/vpn_manager.cpp
+  src/db/database.cpp
+)
+target_include_directories(nexus_core_tests PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+)
+target_link_libraries(nexus_core_tests PRIVATE nexus_core nexus_sqlite)
 target_compile_options(nexus_core_tests PRIVATE /W4 /WX /utf-8 /EHsc)
 set_target_properties(nexus_core_tests PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${NEXUS_OUTPUT_DIR}"

@@ -2,8 +2,11 @@
 
 #include <windows.h>
 #include <dwmapi.h>
+#include <shellapi.h>
+#include <shlobj.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -39,6 +42,11 @@ constexpr int kCommandReload = 1004;
 constexpr int kCommandToggleDashboard = 1005;
 constexpr int kCommandBack = 1006;
 constexpr int kCommandForward = 1007;
+constexpr int kCommandRestoreTab = 1008;
+constexpr int kCommandBookmark = 1009;
+constexpr int kCommandZoomIn = 1010;
+constexpr int kCommandZoomOut = 1011;
+constexpr int kCommandZoomReset = 1012;
 
 constexpr char kNewTabUrl[] = "nexus://newtab/";
 constexpr char kShellUrl[] = "nexus://app/";
@@ -104,7 +112,14 @@ BrowserWindow::BrowserWindow(CefRefPtr<PrivacyService> privacy,
       data_root_(std::move(data_root)),
       ipc_router_(std::make_unique<IpcRouter>(this)),
       initial_url_(std::move(initial_url)),
-      smoke_test_(smoke_test) {}
+      smoke_test_(smoke_test) {
+  db_ = std::make_shared<db::Database>();
+  db_->Open(data_root_ / L"profile" / L"nexus.db");
+  vpn_ = std::make_shared<vpn::VpnManager>();
+  if (privacy_ && privacy_->filter_engine()) {
+    privacy_->filter_engine()->LoadDatabaseRules(db_->GetFilterRules());
+  }
+}
 
 BrowserWindow::~BrowserWindow() = default;
 
@@ -125,12 +140,15 @@ void BrowserWindow::OnWindowCreated(CefRefPtr<CefWindow> window) {
 
   window_->SetAccelerator(kCommandFocusAddress, 'L', false, true, false, true);
   window_->SetAccelerator(kCommandNewTab, 'T', false, true, false, true);
+  window_->SetAccelerator(kCommandRestoreTab, 'T', true, true, false, true);
   window_->SetAccelerator(kCommandCloseTab, 'W', false, true, false, true);
   window_->SetAccelerator(kCommandReload, 'R', false, true, false, true);
-  window_->SetAccelerator(kCommandToggleDashboard, 'P', true, true, false,
-                          true);
+  window_->SetAccelerator(kCommandToggleDashboard, 'P', true, true, false, true);
   window_->SetAccelerator(kCommandBack, VK_LEFT, false, false, true, true);
   window_->SetAccelerator(kCommandForward, VK_RIGHT, false, false, true, true);
+  window_->SetAccelerator(kCommandZoomIn, VK_OEM_PLUS, false, true, false, true);
+  window_->SetAccelerator(kCommandZoomOut, VK_OEM_MINUS, false, true, false, true);
+  window_->SetAccelerator(kCommandZoomReset, '0', false, true, false, true);
 
   CefBrowserSettings shell_settings;
   shell_settings.background_color = kWindowBackground;
@@ -203,6 +221,9 @@ bool BrowserWindow::OnAccelerator(CefRefPtr<CefWindow> /*window*/,
       CreateTab(kNewTabUrl, true);
       FocusAddressBar();
       return true;
+    case kCommandRestoreTab:
+      RestoreTab();
+      return true;
     case kCommandCloseTab: {
       Tab* tab = ActiveTab();
       if (tab) {
@@ -219,6 +240,15 @@ bool BrowserWindow::OnAccelerator(CefRefPtr<CefWindow> /*window*/,
       return GoBack();
     case kCommandForward:
       return GoForward();
+    case kCommandZoomIn:
+      ZoomIn();
+      return true;
+    case kCommandZoomOut:
+      ZoomOut();
+      return true;
+    case kCommandZoomReset:
+      ResetZoom();
+      return true;
     default:
       return false;
   }
@@ -370,6 +400,12 @@ void BrowserWindow::OnTabLoadingState(int tab_id,
   tab->loading = loading;
   tab->can_go_back = can_go_back;
   tab->can_go_forward = can_go_forward;
+
+  if (!loading && db_ && !tab->url.empty() &&
+      !core::IsInternalNewTabUrl(tab->url) && !core::IsInternalAppUrl(tab->url)) {
+    db_->AddHistory(tab->url, tab->title.empty() ? tab->url : tab->title);
+  }
+
   BroadcastState();
 
   if (!loading && smoke_test_) {
@@ -431,7 +467,7 @@ CefRefPtr<CefDictionaryValue> BrowserWindow::BuildAppInfo() const {
   info->SetString("chromiumVersion", CefString(ChromiumVersion()));
   info->SetString("dataDir", CefString(core::PathToUtf8(data_root_)));
   info->SetBool("sandbox", true);
-  info->SetInt("milestone", 1);
+  info->SetInt("milestone", 8);
   return info;
 }
 
@@ -452,12 +488,14 @@ CefRefPtr<CefDictionaryValue> BrowserWindow::BuildBrowserState() const {
     item->SetString("errorText", CefString(tab.error_text));
     item->SetBool("secure", core::IsHttpsUrl(tab.url));
     item->SetBool("internal", core::IsInternalNewTabUrl(tab.url));
+    item->SetDouble("zoomLevel", tab.zoom_level);
     list->SetDictionary(static_cast<size_t>(i), item);
   }
 
   state->SetList("tabs", list);
   state->SetInt("activeTabId", active_tab_id_);
   state->SetBool("dashboardOpen", dashboard_open_);
+  state->SetString("activePanel", CefString(active_panel_));
   return state;
 }
 
@@ -465,6 +503,8 @@ CefRefPtr<CefDictionaryValue> BrowserWindow::BuildPrivacyState() const {
   CefRefPtr<CefDictionaryValue> state = CefDictionaryValue::Create();
   state->SetString("cookieMode",
                    PrivacyService::CookieModeToString(privacy_->mode()));
+  state->SetDouble("blockedTrackers",
+                   static_cast<double>(privacy_->blocked_trackers()));
   state->SetDouble("blockedCookies",
                    static_cast<double>(privacy_->blocked_cookies()));
   state->SetDouble("deniedPermissions",
@@ -541,6 +581,13 @@ bool BrowserWindow::CloseTab(int tab_id) {
     return false;
   }
 
+  if (!core::IsInternalNewTabUrl(tabs_[index].url)) {
+    closed_tabs_.push_back({tabs_[index].url, tabs_[index].title});
+    if (closed_tabs_.size() > 25) {
+      closed_tabs_.erase(closed_tabs_.begin());
+    }
+  }
+
   if (tabs_.size() == 1) {
     if (window_) {
       window_->Close();
@@ -573,6 +620,26 @@ bool BrowserWindow::CloseTab(int tab_id) {
   LayoutViews();
   UpdateWindowTitle();
   BroadcastState();
+  return true;
+}
+
+int BrowserWindow::DuplicateTab(int tab_id) {
+  CEF_REQUIRE_UI_THREAD();
+  Tab* tab = FindTab(tab_id);
+  if (!tab) {
+    return 0;
+  }
+  return CreateTab(tab->url, true);
+}
+
+bool BrowserWindow::RestoreTab() {
+  CEF_REQUIRE_UI_THREAD();
+  if (closed_tabs_.empty()) {
+    return false;
+  }
+  ClosedTab last = closed_tabs_.back();
+  closed_tabs_.pop_back();
+  CreateTab(last.url, true);
   return true;
 }
 
@@ -653,6 +720,188 @@ bool BrowserWindow::Stop() {
   }
   browser->StopLoad();
   return true;
+}
+
+void BrowserWindow::SetActivePanel(const std::string& panel) {
+  CEF_REQUIRE_UI_THREAD();
+  active_panel_ = panel;
+  SetDashboardOpen(panel != "none");
+}
+
+double BrowserWindow::ZoomIn() {
+  CEF_REQUIRE_UI_THREAD();
+  Tab* tab = ActiveTab();
+  if (!tab || !tab->browser) return 0.0;
+  tab->zoom_level += 0.2;
+  if (tab->zoom_level > 3.0) tab->zoom_level = 3.0;
+  tab->browser->GetHost()->SetZoomLevel(tab->zoom_level);
+  BroadcastState();
+  return tab->zoom_level;
+}
+
+double BrowserWindow::ZoomOut() {
+  CEF_REQUIRE_UI_THREAD();
+  Tab* tab = ActiveTab();
+  if (!tab || !tab->browser) return 0.0;
+  tab->zoom_level -= 0.2;
+  if (tab->zoom_level < -2.0) tab->zoom_level = -2.0;
+  tab->browser->GetHost()->SetZoomLevel(tab->zoom_level);
+  BroadcastState();
+  return tab->zoom_level;
+}
+
+double BrowserWindow::ResetZoom() {
+  CEF_REQUIRE_UI_THREAD();
+  Tab* tab = ActiveTab();
+  if (!tab || !tab->browser) return 0.0;
+  tab->zoom_level = 0.0;
+  tab->browser->GetHost()->SetZoomLevel(0.0);
+  BroadcastState();
+  return 0.0;
+}
+
+void BrowserWindow::FindInPage(const std::string& query, bool forward, bool find_next) {
+  CEF_REQUIRE_UI_THREAD();
+  CefRefPtr<CefBrowser> browser = ActiveBrowser();
+  if (!browser || query.empty()) return;
+  browser->GetHost()->Find(CefString(query), forward, false, find_next);
+}
+
+void BrowserWindow::StopFinding(bool clear_selection) {
+  CEF_REQUIRE_UI_THREAD();
+  CefRefPtr<CefBrowser> browser = ActiveBrowser();
+  if (!browser) return;
+  browser->GetHost()->StopFinding(clear_selection);
+}
+
+void BrowserWindow::OnDownloadStarted(const db::DownloadRecord& record, CefRefPtr<CefDownloadItemCallback> callback) {
+  CEF_REQUIRE_UI_THREAD();
+  if (db_) {
+    db_->UpsertDownload(record);
+  }
+  if (callback) {
+    active_downloads_[record.guid] = callback;
+  }
+  BroadcastDownloads();
+}
+
+void BrowserWindow::OnDownloadUpdated(CefRefPtr<CefDownloadItem> item, CefRefPtr<CefDownloadItemCallback> callback) {
+  CEF_REQUIRE_UI_THREAD();
+  if (!item || !db_) return;
+
+  const std::string guid = std::to_string(item->GetId());
+  if (callback) {
+    active_downloads_[guid] = callback;
+  }
+
+  db::DownloadRecord rec;
+  rec.guid = guid;
+  rec.url = item->GetURL().ToString();
+  rec.file_path = item->GetFullPath().ToString();
+  rec.file_name = std::filesystem::u8path(rec.file_path).filename().string();
+  rec.total_bytes = item->GetTotalBytes();
+  rec.received_bytes = item->GetReceivedBytes();
+
+  if (item->IsComplete()) {
+    rec.state = "completed";
+    rec.completed_at = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    active_downloads_.erase(guid);
+  } else if (item->IsCanceled()) {
+    rec.state = "cancelled";
+    active_downloads_.erase(guid);
+  } else {
+    rec.state = "in_progress";
+  }
+
+  db_->UpsertDownload(rec);
+  BroadcastDownloads();
+}
+
+bool BrowserWindow::CancelDownload(const std::string& guid) {
+  CEF_REQUIRE_UI_THREAD();
+  auto it = active_downloads_.find(guid);
+  if (it != active_downloads_.end() && it->second) {
+    it->second->Cancel();
+    active_downloads_.erase(it);
+  }
+  if (db_) {
+    db::DownloadRecord rec;
+    rec.guid = guid;
+    rec.state = "cancelled";
+    db_->UpsertDownload(rec);
+  }
+  BroadcastDownloads();
+  return true;
+}
+
+bool BrowserWindow::OpenDownloadedFile(const std::string& guid) {
+  if (!db_) return false;
+  auto list = db_->GetDownloads(50);
+  for (const auto& item : list) {
+    if (item.guid == guid && !item.file_path.empty()) {
+      std::wstring wide = std::filesystem::u8path(item.file_path).wstring();
+      ::ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool BrowserWindow::OpenDownloadedFolder(const std::string& guid) {
+  if (!db_) return false;
+  auto list = db_->GetDownloads(50);
+  for (const auto& item : list) {
+    if (item.guid == guid && !item.file_path.empty()) {
+      std::wstring folder = std::filesystem::u8path(item.file_path).parent_path().wstring();
+      ::ShellExecuteW(nullptr, L"explore", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+      return true;
+    }
+  }
+  return false;
+}
+
+void BrowserWindow::BroadcastDownloads() {
+  if (!db_) return;
+  auto list = db_->GetDownloads(50);
+  CefRefPtr<CefDictionaryValue> payload = CefDictionaryValue::Create();
+  CefRefPtr<CefListValue> arr = CefListValue::Create();
+  for (size_t i = 0; i < list.size(); ++i) {
+    const auto& item = list[i];
+    CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
+    dict->SetInt("id", static_cast<int>(item.id));
+    dict->SetString("guid", CefString(item.guid));
+    dict->SetString("url", CefString(item.url));
+    dict->SetString("fileName", CefString(item.file_name));
+    dict->SetString("filePath", CefString(item.file_path));
+    dict->SetDouble("totalBytes", static_cast<double>(item.total_bytes));
+    dict->SetDouble("receivedBytes", static_cast<double>(item.received_bytes));
+    dict->SetDouble("speed", 0.0);
+    double pct = item.total_bytes > 0 ? (100.0 * item.received_bytes / item.total_bytes) : 0.0;
+    dict->SetDouble("percent", pct);
+    dict->SetString("state", CefString(item.state));
+    dict->SetDouble("createdAt", static_cast<double>(item.created_at));
+    dict->SetDouble("completedAt", static_cast<double>(item.completed_at));
+    arr->SetDictionary(i, dict);
+  }
+  payload->SetList("items", arr);
+  SendEvent("downloads.changed", payload);
+}
+
+void BrowserWindow::OnMediaDetected(const db::MediaItem& item) {
+  CEF_REQUIRE_UI_THREAD();
+  if (db_) {
+    db_->AddMediaItem(item);
+  }
+  CefRefPtr<CefDictionaryValue> payload = CefDictionaryValue::Create();
+  payload->SetInt("id", static_cast<int>(item.id));
+  payload->SetString("url", CefString(item.url));
+  payload->SetString("sourceUrl", CefString(item.source_url));
+  payload->SetString("mediaType", CefString(item.media_type));
+  payload->SetString("title", CefString(item.title));
+  payload->SetDouble("sizeBytes", static_cast<double>(item.size_bytes));
+  payload->SetDouble("discoveredAt", static_cast<double>(item.discovered_at));
+  SendEvent("media.detected", payload);
 }
 
 void BrowserWindow::SetDashboardOpen(bool open) {
