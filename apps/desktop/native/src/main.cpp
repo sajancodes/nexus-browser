@@ -94,7 +94,7 @@ int RunMain(HINSTANCE hInstance,
     return 1;
   }
 
-  CefRefPtr<NexusApp> app = new NexusApp(options.data_root);
+  CefRefPtr<NexusApp> app = new NexusApp(options);
 
   // Child processes (renderer, GPU, utility) execute and exit here.
   const int process_exit_code =

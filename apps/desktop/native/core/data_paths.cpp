@@ -8,6 +8,8 @@
 #include <string_view>
 #include <system_error>
 
+#include "core/url_utils.h"
+
 namespace nexus::core {
 namespace {
 
@@ -42,6 +44,22 @@ std::wstring Trim(const std::wstring& value) {
     --end;
   }
   return value.substr(start, end - start);
+}
+
+std::string WideToUtf8(const std::wstring& text) {
+  if (text.empty()) {
+    return {};
+  }
+  const int required = ::WideCharToMultiByte(
+      CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0,
+      nullptr, nullptr);
+  if (required <= 0) {
+    return {};
+  }
+  std::string utf8(static_cast<size_t>(required), '\0');
+  ::WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
+                        utf8.data(), required, nullptr, nullptr);
+  return utf8;
 }
 
 std::wstring StripSurroundingQuotes(std::wstring value) {
@@ -116,6 +134,33 @@ LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& args,
 
     constexpr std::wstring_view kUserDataDir = L"--user-data-dir=";
     constexpr std::wstring_view kNexusUserDataDir = L"--nexus-user-data-dir=";
+    constexpr std::wstring_view kUrlPrefix = L"--url=";
+
+    if (arg == L"--smoke-test") {
+      options.smoke_test = true;
+      continue;
+    }
+
+    if (arg == L"--url") {
+      if (i + 1 < args.size()) {
+        const std::string raw = WideToUtf8(args[++i]);
+        const auto target = ResolveNavigationInput(raw);
+        if (target.allowed) {
+          options.initial_url = target.url;
+        }
+      }
+      continue;
+    }
+
+    if (arg.size() > kUrlPrefix.size() &&
+        arg.compare(0, kUrlPrefix.size(), kUrlPrefix) == 0) {
+      const std::string raw = WideToUtf8(arg.substr(kUrlPrefix.size()));
+      const auto target = ResolveNavigationInput(raw);
+      if (target.allowed) {
+        options.initial_url = target.url;
+      }
+      continue;
+    }
 
     if (arg == L"--user-data-dir") {
       if (i + 1 < args.size()) {
@@ -132,6 +177,12 @@ LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& args,
                arg.compare(0, kNexusUserDataDir.size(), kNexusUserDataDir) ==
                    0) {
       override_path = arg.substr(kNexusUserDataDir.size());
+    } else if (i > 0 && !arg.empty() && arg[0] != L'-') {
+      const std::string raw = WideToUtf8(arg);
+      const auto target = ResolveNavigationInput(raw);
+      if (target.allowed && !target.search && options.initial_url.empty()) {
+        options.initial_url = target.url;
+      }
     }
   }
 

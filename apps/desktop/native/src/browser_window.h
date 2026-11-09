@@ -23,7 +23,9 @@ class IpcRouter;
 class BrowserWindow final : public CefWindowDelegate {
  public:
   BrowserWindow(CefRefPtr<PrivacyService> privacy,
-                std::filesystem::path data_root);
+                std::filesystem::path data_root,
+                std::string initial_url = {},
+                bool smoke_test = false);
   ~BrowserWindow() override;
 
   void Show();
@@ -121,6 +123,8 @@ class BrowserWindow final : public CefWindowDelegate {
   int next_tab_id_ = 1;
   int active_tab_id_ = 0;
   bool dashboard_open_ = false;
+  std::string initial_url_;
+  bool smoke_test_ = false;
 
   IMPLEMENT_REFCOUNTING(BrowserWindow);
   DISALLOW_COPY_AND_ASSIGN(BrowserWindow);

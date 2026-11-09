@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 
+#include "core/data_paths.h"
 #include "include/cef_app.h"
 #include "include/cef_browser_process_handler.h"
 #include "src/privacy_service.h"
@@ -18,7 +19,7 @@ class NexusRenderProcessHandler;
 // decides whether this is a child process.
 class NexusApp final : public CefApp, public CefBrowserProcessHandler {
  public:
-  explicit NexusApp(std::filesystem::path data_root);
+  explicit NexusApp(core::LaunchOptions options);
   ~NexusApp() override;
 
   // CefApp
@@ -30,7 +31,7 @@ class NexusApp final : public CefApp, public CefBrowserProcessHandler {
   void OnContextInitialized() override;
 
  private:
-  const std::filesystem::path data_root_;
+  const core::LaunchOptions options_;
   std::shared_ptr<AssetStore> asset_store_;
   CefRefPtr<PrivacyService> privacy_;
   CefRefPtr<BrowserWindow> window_;

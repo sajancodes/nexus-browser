@@ -12,6 +12,8 @@ namespace nexus::core {
 struct LaunchOptions {
   std::filesystem::path data_root;
   bool no_sandbox_requested = false;
+  std::string initial_url;
+  bool smoke_test = false;
   std::string error;
 };
 

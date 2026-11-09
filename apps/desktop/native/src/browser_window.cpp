@@ -97,10 +97,14 @@ class ClearCookiesCallback final : public CefDeleteCookiesCallback {
 }  // namespace
 
 BrowserWindow::BrowserWindow(CefRefPtr<PrivacyService> privacy,
-                             std::filesystem::path data_root)
+                             std::filesystem::path data_root,
+                             std::string initial_url,
+                             bool smoke_test)
     : privacy_(std::move(privacy)),
       data_root_(std::move(data_root)),
-      ipc_router_(std::make_unique<IpcRouter>(this)) {}
+      ipc_router_(std::make_unique<IpcRouter>(this)),
+      initial_url_(std::move(initial_url)),
+      smoke_test_(smoke_test) {}
 
 BrowserWindow::~BrowserWindow() = default;
 
@@ -141,10 +145,12 @@ void BrowserWindow::OnWindowCreated(CefRefPtr<CefWindow> window) {
   window_->Show();
   ApplyDarkTitleBar();
 
-  CreateTab(kNewTabUrl, true);
-  std::fprintf(stderr, "NEXUS OnWindowCreated: shell_view=%p tabs=%zu active=%d\\n",
+  const std::string start_url =
+      initial_url_.empty() ? std::string(kNewTabUrl) : initial_url_;
+  CreateTab(start_url, true);
+  std::fprintf(stderr, "NEXUS OnWindowCreated: shell_view=%p tabs=%zu active=%d start_url=%s\n",
                static_cast<void*>(shell_view_.get()), tabs_.size(),
-               active_tab_id_);
+               active_tab_id_, start_url.c_str());
   std::fflush(stderr);
   LayoutViews();
 }
@@ -365,6 +371,15 @@ void BrowserWindow::OnTabLoadingState(int tab_id,
   tab->can_go_back = can_go_back;
   tab->can_go_forward = can_go_forward;
   BroadcastState();
+
+  if (!loading && smoke_test_) {
+    std::fprintf(stderr, "NEXUS_SMOKE_TEST_PASSED: %s title='%s'\n",
+                 tab->url.c_str(), tab->title.c_str());
+    std::fflush(stderr);
+    if (window_) {
+      window_->Close();
+    }
+  }
 }
 
 void BrowserWindow::OnTabLoadError(int tab_id,
@@ -379,6 +394,15 @@ void BrowserWindow::OnTabLoadError(int tab_id,
   tab->error_code = error_code;
   tab->error_text = error_text;
   BroadcastState();
+
+  if (smoke_test_) {
+    std::fprintf(stderr, "NEXUS_SMOKE_TEST_FAILED: %s error=%d (%s)\n",
+                 tab->url.c_str(), error_code, error_text.c_str());
+    std::fflush(stderr);
+    if (window_) {
+      window_->Close();
+    }
+  }
 }
 
 void BrowserWindow::OnTabRenderProcessTerminated(int tab_id) {

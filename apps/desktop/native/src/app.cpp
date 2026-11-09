@@ -15,8 +15,8 @@
 
 namespace nexus {
 
-NexusApp::NexusApp(std::filesystem::path data_root)
-    : data_root_(std::move(data_root)) {}
+NexusApp::NexusApp(core::LaunchOptions options)
+    : options_(std::move(options)) {}
 
 NexusApp::~NexusApp() = default;
 
@@ -67,9 +67,10 @@ void NexusApp::OnContextInitialized() {
   }
 
   privacy_ = new PrivacyService();
-  privacy_->LoadPreferences(data_root_ / L"profile" / L"preferences.json");
+  privacy_->LoadPreferences(options_.data_root / L"profile" / L"preferences.json");
 
-  window_ = new BrowserWindow(privacy_, data_root_);
+  window_ = new BrowserWindow(privacy_, options_.data_root,
+                              options_.initial_url, options_.smoke_test);
   window_->Show();
 }
 

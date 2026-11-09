@@ -160,6 +160,23 @@ void TestDataPaths() {
   }
   {
     const auto options =
+        ParseLaunchOptions({L"nexus.exe", L"--url=https://example.com"}, L"");
+    CHECK(options.error.empty());
+    CHECK(options.initial_url == "https://example.com");
+  }
+  {
+    const auto options =
+        ParseLaunchOptions({L"nexus.exe", L"https://example.org"}, L"");
+    CHECK(options.error.empty());
+    CHECK(options.initial_url == "https://example.org");
+  }
+  {
+    const auto options =
+        ParseLaunchOptions({L"nexus.exe", L"--smoke-test"}, L"");
+    CHECK(options.smoke_test);
+  }
+  {
+    const auto options =
         ParseLaunchOptions({L"nexus.exe", L"--no-sandbox"}, L"");
     CHECK(options.no_sandbox_requested);
     CHECK(!options.error.empty());
