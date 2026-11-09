@@ -21,6 +21,7 @@
 #include "include/wrapper/cef_helpers.h"
 #include "src/content_client.h"
 #include "src/ipc_router.h"
+#include "src/native_chrome.h"
 #include "src/shell_client.h"
 
 #ifndef NEXUS_VERSION
@@ -32,7 +33,6 @@ namespace {
 
 constexpr int kInitialWindowWidth = 1280;
 constexpr int kInitialWindowHeight = 800;
-constexpr int kShellHeight = 114;
 constexpr cef_color_t kWindowBackground = 0xFF111315;
 
 constexpr int kCommandFocusAddress = 1001;
@@ -150,14 +150,8 @@ void BrowserWindow::OnWindowCreated(CefRefPtr<CefWindow> window) {
   window_->SetAccelerator(kCommandZoomOut, VK_OEM_MINUS, false, true, false, true);
   window_->SetAccelerator(kCommandZoomReset, '0', false, true, false, true);
 
-  CefBrowserSettings shell_settings;
-  shell_settings.background_color = kWindowBackground;
-  CefRefPtr<CefDictionaryValue> shell_extra = CefDictionaryValue::Create();
-  shell_extra->SetString("role", "shell");
-  shell_view_ = CefBrowserView::CreateBrowserView(
-      new ShellClient(this), CefString(kShellUrl), shell_settings, shell_extra,
-      nullptr, new NexusBrowserViewDelegate());
-  window_->AddChildView(shell_view_);
+  native_chrome_ = new NativeChrome(this);
+  native_chrome_->Attach(window_);
 
   window_->CenterWindow(CefSize(kInitialWindowWidth, kInitialWindowHeight));
   window_->Show();
@@ -178,6 +172,7 @@ void BrowserWindow::OnWindowDestroyed(CefRefPtr<CefWindow> /*window*/) {
   std::fprintf(stderr, "NEXUS OnWindowDestroyed\\n");
   std::fflush(stderr);
   shell_loaded_ = false;
+  native_chrome_ = nullptr;
   shell_view_ = nullptr;
   shell_browser_ = nullptr;
   tabs_.clear();
@@ -722,6 +717,11 @@ bool BrowserWindow::Stop() {
   return true;
 }
 
+bool BrowserWindow::ReloadOrStop() { Tab* tab = ActiveTab(); return tab && tab->loading ? Stop() : Reload(); }
+bool BrowserWindow::NavigateFromAddressBar(const std::string& input) {
+  const auto target = core::ResolveNavigationInput(input); return target.allowed && NavigateActive(target.url);
+}
+
 void BrowserWindow::SetActivePanel(const std::string& panel) {
   CEF_REQUIRE_UI_THREAD();
   active_panel_ = panel;
@@ -906,6 +906,7 @@ void BrowserWindow::OnMediaDetected(const db::MediaItem& item) {
 
 void BrowserWindow::SetDashboardOpen(bool open) {
   CEF_REQUIRE_UI_THREAD();
+  if (open && !EnsureReactInterface()) return;
   if (dashboard_open_ == open) {
     return;
   }
@@ -931,9 +932,8 @@ void BrowserWindow::FocusAddressBar() {
   if (window_) {
     window_->Activate();
   }
-  if (shell_view_) {
-    shell_view_->RequestFocus();
-  }
+  if (!dashboard_open_ && native_chrome_) { native_chrome_->FocusAddress(); return; }
+  if (shell_view_) shell_view_->RequestFocus();
   SendEvent("ui.focusAddress", CefDictionaryValue::Create());
 }
 
@@ -989,19 +989,16 @@ CefRefPtr<CefBrowser> BrowserWindow::ActiveBrowser() {
 }
 
 void BrowserWindow::LayoutViews() {
-  if (!window_ || !shell_view_) {
+  if (!window_) {
     return;
   }
 
   const CefRect client = window_->GetClientAreaBoundsInScreen();
   const int width = std::max(1, client.width);
   const int height = std::max(1, client.height);
-  std::fprintf(stderr, "NEXUS LayoutViews: client=%d,%d %dx%d shell=%d tabs=%zu dashboard=%d\\n",
-               client.x, client.y, client.width, client.height, kShellHeight,
-               tabs_.size(), dashboard_open_ ? 1 : 0);
-  std::fflush(stderr);
+  if (native_chrome_) native_chrome_->Layout(width, height);
 
-  if (dashboard_open_) {
+  if (dashboard_open_ && shell_view_) {
     shell_view_->SetBounds(CefRect(0, 0, width, height));
     for (Tab& tab : tabs_) {
       if (tab.view) {
@@ -1011,26 +1008,49 @@ void BrowserWindow::LayoutViews() {
     return;
   }
 
-  const int shell_height = std::min(kShellHeight, height);
-  shell_view_->SetBounds(CefRect(0, 0, width, shell_height));
+  const int chrome_height = native_chrome_ ? NativeChrome::kHeight : 0;
+  if (shell_view_) shell_view_->SetBounds(CefRect(0, 0, width, 0));
 
-  const int content_height = std::max(0, height - shell_height);
+  const int content_height = std::max(0, height - chrome_height);
   for (Tab& tab : tabs_) {
     if (tab.view) {
-      tab.view->SetBounds(CefRect(0, shell_height, width, content_height));
+      tab.view->SetBounds(CefRect(0, chrome_height, width, content_height));
     }
   }
 }
 
 void BrowserWindow::UpdateVisibility() {
   if (shell_view_) {
-    shell_view_->SetVisible(true);
+    shell_view_->SetVisible(dashboard_open_);
   }
   for (Tab& tab : tabs_) {
     if (tab.view) {
       tab.view->SetVisible(!dashboard_open_ && tab.id == active_tab_id_);
     }
   }
+}
+
+bool BrowserWindow::EnsureReactInterface() {
+  if (shell_view_) return true;
+  if (!window_) return false;
+  CefBrowserSettings settings;
+  settings.background_color = kWindowBackground;
+  CefRefPtr<CefDictionaryValue> extra = CefDictionaryValue::Create();
+  extra->SetString("role", "shell");
+  shell_view_ = CefBrowserView::CreateBrowserView(
+      new ShellClient(this), CefString(kShellUrl), settings, extra, nullptr,
+      new NexusBrowserViewDelegate());
+  if (!shell_view_) return false;
+  window_->AddChildView(shell_view_);
+  LayoutViews();
+  return true;
+}
+
+void BrowserWindow::SyncNativeChrome() {
+  if (!native_chrome_) return;
+  const Tab* tab = FindTab(active_tab_id_);
+  native_chrome_->Sync(tab ? tab->url : std::string(), tab && tab->loading,
+                       tab && tab->can_go_back, tab && tab->can_go_forward);
 }
 
 void BrowserWindow::UpdateWindowTitle() {
@@ -1048,6 +1068,7 @@ void BrowserWindow::UpdateWindowTitle() {
 }
 
 void BrowserWindow::BroadcastState() {
+  SyncNativeChrome();
   if (!shell_loaded_ || !shell_browser_) {
     return;
   }

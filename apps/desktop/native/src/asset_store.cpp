@@ -25,16 +25,16 @@ std::string LowerExtension(const std::filesystem::path& path) {
 
 std::string MimeTypeForExtension(std::string_view extension) {
   if (extension == ".html") {
-    return "text/html; charset=utf-8";
+    return "text/html";
   }
   if (extension == ".js" || extension == ".mjs") {
-    return "text/javascript; charset=utf-8";
+    return "text/javascript";
   }
   if (extension == ".css") {
-    return "text/css; charset=utf-8";
+    return "text/css";
   }
   if (extension == ".json" || extension == ".webmanifest") {
-    return "application/json; charset=utf-8";
+    return "application/json";
   }
   if (extension == ".svg") {
     return "image/svg+xml";
@@ -61,7 +61,7 @@ std::string MimeTypeForExtension(std::string_view extension) {
     return "font/ttf";
   }
   if (extension == ".txt") {
-    return "text/plain; charset=utf-8";
+    return "text/plain";
   }
   return {};
 }
@@ -128,7 +128,7 @@ AssetResponse MakeError(int status,
   AssetResponse response;
   response.status = status;
   response.status_text = std::move(status_text);
-  response.mime_type = "text/plain; charset=utf-8";
+  response.mime_type = "text/plain";
   response.body = std::move(message);
   return response;
 }

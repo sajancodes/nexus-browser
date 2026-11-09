@@ -68,7 +68,7 @@ void TestNavigationResolution() {
     const auto result = ResolveNavigationInput("privacy browser");
     CHECK(result.allowed);
     CHECK(result.search);
-    CHECK(result.url == "https://duckduckgo.com/?q=privacy%20browser");
+    CHECK(result.url == "https://www.google.com/search?q=privacy%20browser");
   }
   {
     const auto result = ResolveNavigationInput("nexus://newtab/?focus=1");

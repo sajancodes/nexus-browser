@@ -1,6 +1,7 @@
 #include "src/scheme_handler.h"
 
 #include <cstring>
+#include <fstream>
 #include <string>
 #include <utility>
 
@@ -22,18 +23,31 @@ constexpr char kShellCsp[] =
 constexpr char kNewTabCsp[] =
     "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; "
-    "form-action https://duckduckgo.com; frame-ancestors 'none'; "
+    "form-action https://www.google.com https://google.com; frame-ancestors 'none'; "
     "object-src 'none'";
 
 constexpr char kPermissionsPolicy[] =
     "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
     "serial=(), hid=(), midi=(), clipboard-read=(), clipboard-write=()";
 
+std::string FormatContentType(const std::string& mime_type) {
+  if (mime_type.empty()) {
+    return {};
+  }
+  if (mime_type.rfind("text/", 0) == 0 ||
+      mime_type == "application/json" ||
+      mime_type == "image/svg+xml") {
+    return mime_type + "; charset=utf-8";
+  }
+  return mime_type;
+}
+
 CefResponse::HeaderMap BuildHeaders(const std::string& host,
                                     const std::string& mime_type) {
   CefResponse::HeaderMap headers;
-  if (!mime_type.empty()) {
-    headers.emplace("Content-Type", mime_type);
+  const std::string content_type = FormatContentType(mime_type);
+  if (!content_type.empty()) {
+    headers.emplace("Content-Type", content_type);
   }
   headers.emplace("Content-Security-Policy",
                   host == "newtab" ? kNewTabCsp : kShellCsp);
@@ -67,10 +81,16 @@ class MemoryResourceHandler final : public CefResourceHandler {
     response->SetStatus(asset_.status);
     response->SetStatusText(CefString(asset_.status_text));
     response->SetMimeType(CefString(asset_.mime_type));
+    if (asset_.mime_type.rfind("text/", 0) == 0 ||
+        asset_.mime_type == "application/json" ||
+        asset_.mime_type == "image/svg+xml") {
+      response->SetCharset("utf-8");
+    }
 
     CefResponse::HeaderMap headers = headers_;
-    if (!asset_.mime_type.empty() && headers.find("Content-Type") == headers.end()) {
-      headers.emplace("Content-Type", asset_.mime_type);
+    const std::string content_type = FormatContentType(asset_.mime_type);
+    if (!content_type.empty() && headers.find("Content-Type") == headers.end()) {
+      headers.emplace("Content-Type", content_type);
     }
     response->SetHeaderMap(headers);
     response_length = static_cast<int64_t>(asset_.body.size());
@@ -125,7 +145,7 @@ CefRefPtr<CefResourceHandler> MakeErrorResponse(int status,
   AssetResponse asset;
   asset.status = status;
   asset.status_text = status_text;
-  asset.mime_type = "text/plain; charset=utf-8";
+  asset.mime_type = "text/plain";
   asset.body = message;
   const std::string mime = asset.mime_type;
   return new MemoryResourceHandler(std::move(asset), BuildHeaders(host, mime));

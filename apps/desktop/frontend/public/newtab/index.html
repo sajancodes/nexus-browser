@@ -12,30 +12,18 @@
   <body>
     <main class="newtab">
       <div class="brand">
-        <svg
-          class="brand-mark"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <path d="M12 2.7 19.5 5.4v6.3c0 4.5-3 7.8-7.5 9.6-4.5-1.8-7.5-5.1-7.5-9.6V5.4L12 2.7Z" />
-        </svg>
+        <img class="brand-mark" src="./nexus-logo.png" alt="NEXUS logo" />
         <h1>NEXUS</h1>
         <p class="tagline">Private by default. Local by design.</p>
       </div>
 
       <form
         class="search"
-        action="https://duckduckgo.com/"
+        action="https://www.google.com/search"
         method="get"
         role="search"
       >
-        <label class="visually-hidden" for="q">Search DuckDuckGo</label>
+        <label class="visually-hidden" for="q">Search Google</label>
         <svg
           class="search-icon"
           viewBox="0 0 16 16"
@@ -53,7 +41,7 @@
           id="q"
           name="q"
           type="search"
-          placeholder="Search with DuckDuckGo"
+          placeholder="Search with Google"
           autocomplete="off"
           spellcheck="false"
           autofocus
@@ -62,7 +50,7 @@
       </form>
 
       <p class="privacy-note">
-        Searches go directly to DuckDuckGo. This page makes no network request
+        Searches go directly to Google. This page makes no network request
         until you search.
       </p>
     </main>

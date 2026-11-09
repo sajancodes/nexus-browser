@@ -21,6 +21,7 @@
 namespace nexus {
 
 class IpcRouter;
+class NativeChrome;
 
 // Owns the native window, the permanent shell BrowserView (nexus://app), and
 // one BrowserView per content tab. All methods are called on the CEF UI
@@ -84,6 +85,8 @@ class BrowserWindow final : public CefWindowDelegate {
   bool GoForward();
   bool Reload();
   bool Stop();
+  bool ReloadOrStop();
+  bool NavigateFromAddressBar(const std::string& input);
   double ZoomIn();
   double ZoomOut();
   double ResetZoom();
@@ -140,6 +143,8 @@ class BrowserWindow final : public CefWindowDelegate {
   CefRefPtr<CefBrowser> ActiveBrowser();
   void LayoutViews();
   void UpdateVisibility();
+  bool EnsureReactInterface();
+  void SyncNativeChrome();
   void UpdateWindowTitle();
   void BroadcastState();
   void BroadcastPrivacyState();
@@ -152,6 +157,7 @@ class BrowserWindow final : public CefWindowDelegate {
   std::unique_ptr<IpcRouter> ipc_router_;
 
   CefRefPtr<CefWindow> window_;
+  CefRefPtr<NativeChrome> native_chrome_;
   CefRefPtr<CefBrowser> shell_browser_;
   CefRefPtr<CefBrowserView> shell_view_;
   bool shell_loaded_ = false;

@@ -28,6 +28,7 @@ set(NEXUS_NATIVE_SOURCES
   src/db/database.cpp
   src/ipc_router.cpp
   src/main.cpp
+  src/native_chrome.cpp
   src/privacy/filter_engine.cpp
   src/privacy_service.cpp
   src/render_process_handler.cpp

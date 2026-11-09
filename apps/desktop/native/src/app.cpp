@@ -48,14 +48,6 @@ void NexusApp::OnContextInitialized() {
 
   const std::filesystem::path ui_root = core::ExecutableDirectory() / L"ui";
   asset_store_ = std::make_shared<AssetStore>(ui_root);
-  if (!asset_store_->ready()) {
-    MessageBoxW(nullptr,
-                L"The NEXUS shell assets are missing from the ui directory.\n"
-                L"Build the frontend before launching the browser.",
-                L"NEXUS startup error", MB_ICONERROR | MB_OK);
-    CefQuitMessageLoop();
-    return;
-  }
 
   if (!CefRegisterSchemeHandlerFactory(
           "nexus", "",

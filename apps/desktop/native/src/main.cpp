@@ -119,16 +119,6 @@ int RunMain(HINSTANCE hInstance,
     return 1;
   }
 
-  const std::filesystem::path ui_index =
-      core::ExecutableDirectory() / L"ui" / L"index.html";
-  std::error_code ui_error;
-  if (!std::filesystem::is_regular_file(ui_index, ui_error)) {
-    ShowStartupError(
-        L"The NEXUS shell assets are missing from the ui directory.\n"
-        L"Build the frontend before launching the browser.");
-    return 1;
-  }
-
   const CefSettings settings = BuildCefSettings(
       options.data_root, EnvironmentValue(L"NEXUS_CEF_LOG") == L"1");
   if (!CefInitialize(main_args, settings, app.get(), sandbox_info)) {

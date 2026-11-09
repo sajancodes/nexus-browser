@@ -9,7 +9,7 @@ namespace nexus::core {
 namespace {
 
 constexpr std::string_view kSearchPrefix =
-    "https://duckduckgo.com/?q=";
+    "https://www.google.com/search?q=";
 constexpr std::string_view kNewTabUrl = "nexus://newtab/";
 
 char LowerAscii(char value) {

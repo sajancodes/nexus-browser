@@ -313,7 +313,7 @@ export function Toolbar({
               }
             }}
             aria-label="Address and search bar"
-            placeholder="Search with DuckDuckGo or enter address"
+            placeholder="Search with Google or enter address"
             autoComplete="off"
             spellCheck={false}
           />
