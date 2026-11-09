@@ -1,0 +1,45 @@
+# --- Build outputs -----------------------------------------------------------
+/build/
+/out/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/*.ninja
+**/cmake_install.cmake
+**/compile_commands.json
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.dll
+*.lib
+*.exp
+
+# --- CEF binaries (fetched, never committed) --------------------------------
+/third_party/cef/downloads/
+/third_party/cef/binary/
+/third_party/cef/.installed
+/third_party/cef/VERSION
+
+# --- Node / frontend ---------------------------------------------------------
+node_modules/
+**/node_modules/
+apps/desktop/frontend/dist/
+.vite/
+coverage/
+playwright-report/
+test-results/
+
+# --- Local runtime data ------------------------------------------------------
+/.nexus-data/
+*.log
+logs/
+
+# --- Editors / OS ------------------------------------------------------------
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

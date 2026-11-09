@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="no-referrer" />
+    <title>New Tab</title>
+    <link rel="stylesheet" href="./newtab.css" />
+    <script src="./newtab.js" defer></script>
+  </head>
+  <body>
+    <main class="newtab">
+      <div class="brand">
+        <svg
+          class="brand-mark"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M12 2.7 19.5 5.4v6.3c0 4.5-3 7.8-7.5 9.6-4.5-1.8-7.5-5.1-7.5-9.6V5.4L12 2.7Z" />
+        </svg>
+        <h1>NEXUS</h1>
+        <p class="tagline">Private by default. Local by design.</p>
+      </div>
+
+      <form
+        class="search"
+        action="https://duckduckgo.com/"
+        method="get"
+        role="search"
+      >
+        <label class="visually-hidden" for="q">Search DuckDuckGo</label>
+        <svg
+          class="search-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="7" cy="7" r="4.3" />
+          <path d="m10.2 10.2 3 3" />
+        </svg>
+        <input
+          id="q"
+          name="q"
+          type="search"
+          placeholder="Search with DuckDuckGo"
+          autocomplete="off"
+          spellcheck="false"
+          autofocus
+        />
+        <button type="submit">Search</button>
+      </form>
+
+      <p class="privacy-note">
+        Searches go directly to DuckDuckGo. This page makes no network request
+        until you search.
+      </p>
+    </main>
+
+    <footer class="footer">
+      <span>Local NEXUS page</span>
+      <span>No telemetry</span>
+    </footer>
+  </body>
+</html>

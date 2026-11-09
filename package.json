@@ -1,0 +1,14 @@
+{
+  "name": "nexus",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm --filter @nexus/desktop build",
+    "dev": "pnpm --filter @nexus/desktop dev",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
