@@ -67,6 +67,8 @@ set_target_properties(nexus PROPERTIES
   PDB_OUTPUT_DIRECTORY "${NEXUS_OUTPUT_DIR}"
 )
 
+target_link_options(nexus PRIVATE /DEBUG)
+
 # The CEF sandbox on Windows requires the bootstrap executable. It loads the
 # client DLL whose name matches the EXE stem (nexus.exe -> nexus.dll) from the
 # same directory, initializes the sandbox broker, and calls RunWinMain.

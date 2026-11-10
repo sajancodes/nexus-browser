@@ -996,6 +996,7 @@ void BrowserWindow::LayoutViews() {
   const CefRect client = window_->GetClientAreaBoundsInScreen();
   const int width = std::max(1, client.width);
   const int height = std::max(1, client.height);
+
   if (native_chrome_) native_chrome_->Layout(width, height);
 
   if (dashboard_open_ && shell_view_) {

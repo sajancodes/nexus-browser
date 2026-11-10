@@ -61,6 +61,25 @@ std::string TruncateTitle(const std::string& title, size_t max_len = 20) {
   return title.substr(0, max_len - 1) + "…";
 }
 
+CefBoxLayoutSettings MakeBoxLayoutSettings(bool horizontal,
+                                           int h_spacing,
+                                           int v_spacing,
+                                           int child_spacing) {
+  CefBoxLayoutSettings s;
+  std::memset(&s, 0, sizeof(s));
+  s.size = sizeof(cef_box_layout_settings_t);
+  s.horizontal = horizontal ? 1 : 0;
+  s.inside_border_horizontal_spacing = h_spacing;
+  s.inside_border_vertical_spacing = v_spacing;
+  s.inside_border_insets = {0, 0, 0, 0};
+  s.between_child_spacing = child_spacing;
+  s.main_axis_alignment = CEF_AXIS_ALIGNMENT_START;
+  s.cross_axis_alignment = CEF_AXIS_ALIGNMENT_CENTER;
+  s.minimum_cross_axis_size = 0;
+  s.default_flex = 0;
+  return s;
+}
+
 }  // namespace
 
 NativeChrome::NativeChrome(BrowserWindow* owner) : owner_(owner) {}
@@ -68,7 +87,7 @@ NativeChrome::NativeChrome(BrowserWindow* owner) : owner_(owner) {}
 CefRefPtr<CefLabelButton> NativeChrome::CreateButton(const char* text, int id, const char* tooltip, int width) {
   auto btn = CefLabelButton::CreateLabelButton(this, text);
   btn->SetID(id);
-  btn->SetFontList("Segoe UI, 13px");
+  // btn->SetFontList("Segoe UI, 13px");
   btn->SetEnabledTextColors(kTextWhite);
   btn->SetBackgroundColor(kToolbarBg);
   if (tooltip) {
@@ -86,15 +105,9 @@ void NativeChrome::Attach(CefRefPtr<CefWindow> window) {
   tab_strip_row_->SetBackgroundColor(kTabStripBg);
   window->AddChildView(tab_strip_row_);
 
-  CefBoxLayoutSettings tab_row_settings;
-  tab_row_settings.horizontal = 1;
-  tab_row_settings.inside_border_horizontal_spacing = 8;
-  tab_row_settings.inside_border_vertical_spacing = 4;
-  tab_row_settings.between_child_spacing = 4;
-  tab_strip_row_->SetToBoxLayout(tab_row_settings);
+  tab_strip_layout_ = tab_strip_row_->SetToBoxLayout(MakeBoxLayoutSettings(true, 8, 4, 4));
 
   brand_btn_ = CreateButton(" NEXUS", kIdBrand, "NEXUS Browser");
-  brand_btn_->SetFontList("Segoe UI, Bold 12px");
   brand_btn_->SetBackgroundColor(kTabStripBg);
   brand_btn_->SetEnabledTextColors(kTextWhite);
   if (auto logo = LoadBrandImage()) {
@@ -104,16 +117,13 @@ void NativeChrome::Attach(CefRefPtr<CefWindow> window) {
 
   tabs_container_ = CefPanel::CreatePanel(nullptr);
   tabs_container_->SetBackgroundColor(kTabStripBg);
-  CefBoxLayoutSettings tabs_box_settings;
-  tabs_box_settings.horizontal = 1;
-  tabs_box_settings.inside_border_horizontal_spacing = 0;
-  tabs_box_settings.inside_border_vertical_spacing = 0;
-  tabs_box_settings.between_child_spacing = 2;
-  tabs_layout_ = tabs_container_->SetToBoxLayout(tabs_box_settings);
+  tabs_layout_ = tabs_container_->SetToBoxLayout(MakeBoxLayoutSettings(true, 0, 0, 2));
   tab_strip_row_->AddChildView(tabs_container_);
+  if (tab_strip_layout_) {
+    tab_strip_layout_->SetFlexForView(tabs_container_, 1);
+  }
 
   new_tab_btn_ = CreateButton("+", kIdNewTab, "New Tab (Ctrl+T)", 28);
-  new_tab_btn_->SetFontList("Segoe UI, Bold 14px");
   new_tab_btn_->SetBackgroundColor(kTabStripBg);
   new_tab_btn_->SetEnabledTextColors(kTextMuted);
   tab_strip_row_->AddChildView(new_tab_btn_);
@@ -123,21 +133,12 @@ void NativeChrome::Attach(CefRefPtr<CefWindow> window) {
   toolbar_row_->SetBackgroundColor(kToolbarBg);
   window->AddChildView(toolbar_row_);
 
-  CefBoxLayoutSettings tb_settings;
-  tb_settings.horizontal = 1;
-  tb_settings.inside_border_horizontal_spacing = 10;
-  tb_settings.inside_border_vertical_spacing = 4;
-  tb_settings.between_child_spacing = 6;
-  toolbar_layout_ = toolbar_row_->SetToBoxLayout(tb_settings);
+  toolbar_layout_ = toolbar_row_->SetToBoxLayout(MakeBoxLayoutSettings(true, 10, 4, 6));
 
   back_btn_ = CreateButton("‹", kIdBack, "Back (Alt+Left)", 30);
-  back_btn_->SetFontList("Segoe UI, Bold 15px");
   forward_btn_ = CreateButton("›", kIdForward, "Forward (Alt+Right)", 30);
-  forward_btn_->SetFontList("Segoe UI, Bold 15px");
   reload_btn_ = CreateButton("↻", kIdReload, "Reload (Ctrl+R)", 30);
-  reload_btn_->SetFontList("Segoe UI, 14px");
   bookmark_btn_ = CreateButton("★", kIdBookmark, "Bookmark this tab (Ctrl+D)", 30);
-  bookmark_btn_->SetFontList("Segoe UI, 14px");
 
   toolbar_row_->AddChildView(back_btn_);
   toolbar_row_->AddChildView(forward_btn_);
@@ -147,30 +148,22 @@ void NativeChrome::Attach(CefRefPtr<CefWindow> window) {
   // Address Bar Omnibox Pill
   address_pill_ = CefPanel::CreatePanel(nullptr);
   address_pill_->SetBackgroundColor(kAddressBg);
-  CefBoxLayoutSettings addr_settings;
-  addr_settings.horizontal = 1;
-  addr_settings.inside_border_horizontal_spacing = 8;
-  addr_settings.inside_border_vertical_spacing = 2;
-  addr_settings.between_child_spacing = 6;
-  address_layout_ = address_pill_->SetToBoxLayout(addr_settings);
+  address_layout_ = address_pill_->SetToBoxLayout(MakeBoxLayoutSettings(true, 8, 2, 6));
 
   lock_icon_ = CreateButton("🔒", 0, "Secure connection", 22);
   lock_icon_->SetBackgroundColor(kAddressBg);
   lock_icon_->SetEnabledTextColors(kTextMuted);
-  lock_icon_->SetFontList("Segoe UI, 11px");
   address_pill_->AddChildView(lock_icon_);
 
   address_input_ = CefTextfield::CreateTextfield(this);
   address_input_->SetPlaceholderText("Search Google or enter address");
   address_input_->SetAccessibleName("Address and search bar");
   address_input_->SetBackgroundColor(kAddressBg);
-  address_input_->SetFontList("Segoe UI, 13px");
   address_pill_->AddChildView(address_input_);
 
   shield_badge_ = CreateButton("🛡", kIdDashboard, "NEXUS Privacy & Tracker Protection", 24);
   shield_badge_->SetBackgroundColor(kAddressBg);
   shield_badge_->SetEnabledTextColors(kShieldColor);
-  shield_badge_->SetFontList("Segoe UI, 12px");
   address_pill_->AddChildView(shield_badge_);
 
   if (address_layout_) {
@@ -184,15 +177,13 @@ void NativeChrome::Attach(CefRefPtr<CefWindow> window) {
 
   dashboard_btn_ = CreateButton("🛡", kIdDashboard, "Privacy Dashboard", 30);
   dashboard_btn_->SetEnabledTextColors(kShieldColor);
-  dashboard_btn_->SetFontList("Segoe UI, 13px");
   toolbar_row_->AddChildView(dashboard_btn_);
 
   menu_btn_ = CreateButton("☰", kIdMenu, "Settings & Menu", 30);
-  menu_btn_->SetFontList("Segoe UI, 14px");
   toolbar_row_->AddChildView(menu_btn_);
 }
 
-void NativeChrome::Layout(int width, int height) {
+void NativeChrome::Layout(int width, int /*height*/) {
   const int safe_width = std::max(1, width);
 
   if (tab_strip_row_) {
@@ -216,56 +207,87 @@ void NativeChrome::Sync(const std::vector<TabSummary>& tabs,
 
   if (address_input_ && !address_input_->HasFocus()) {
     if (active_url.empty() || active_url == "nexus://newtab/" || active_url == "nexus://newtab") {
-      address_input_->SetText("");
-    } else {
+      if (!address_input_->GetText().empty()) {
+        address_input_->SetText("");
+      }
+    } else if (address_input_->GetText().ToString() != active_url) {
       address_input_->SetText(active_url);
     }
-    address_input_->ApplyTextColor(kTextWhite, CefRange());
   }
 
-  // Synchronize Tab items in tab strip
   if (!tabs_container_) return;
-  tabs_container_->RemoveAllChildViews();
-  rendered_tabs_.clear();
 
-  for (const TabSummary& tab : tabs) {
-    RenderedTab rt;
-    rt.tab_id = tab.id;
+  bool structure_changed = (tabs.size() != rendered_tabs_.size());
+  if (!structure_changed) {
+    for (size_t i = 0; i < tabs.size(); ++i) {
+      if (tabs[i].id != rendered_tabs_[i].tab_id) {
+        structure_changed = true;
+        break;
+      }
+    }
+  }
 
-    std::string display_title = (tab.is_loading ? "⏳ " : "") + TruncateTitle(tab.title);
-    rt.title_btn = CefLabelButton::CreateLabelButton(this, display_title);
-    rt.title_btn->SetID(kIdTabBase + tab.id);
-    rt.title_btn->SetTooltipText(tab.title.empty() ? tab.url : tab.title + " — " + tab.url);
-    rt.title_btn->SetMinimumSize(CefSize(60, 28));
-    rt.title_btn->SetMaximumSize(CefSize(200, 28));
+  if (structure_changed) {
+    tabs_container_->RemoveAllChildViews();
+    rendered_tabs_.clear();
 
-    rt.close_btn = CefLabelButton::CreateLabelButton(this, "×");
-    rt.close_btn->SetID(kIdCloseBase + tab.id);
-    rt.close_btn->SetTooltipText("Close tab");
-    rt.close_btn->SetFontList("Segoe UI, Bold 12px");
-    rt.close_btn->SetMinimumSize(CefSize(22, 28));
+    for (const TabSummary& tab : tabs) {
+      RenderedTab rt;
+      rt.tab_id = tab.id;
 
-    if (tab.is_active) {
-      rt.title_btn->SetFontList("Segoe UI, SemiBold 12px");
-      rt.title_btn->SetEnabledTextColors(kTextWhite);
-      rt.title_btn->SetBackgroundColor(kActiveTabBg);
-      rt.close_btn->SetEnabledTextColors(kTextMuted);
-      rt.close_btn->SetBackgroundColor(kActiveTabBg);
-    } else {
-      rt.title_btn->SetFontList("Segoe UI, 12px");
-      rt.title_btn->SetEnabledTextColors(kTextMuted);
-      rt.title_btn->SetBackgroundColor(kInactiveTabBg);
-      rt.close_btn->SetEnabledTextColors(kTextDim);
-      rt.close_btn->SetBackgroundColor(kInactiveTabBg);
+      std::string display_title = (tab.is_loading ? "⏳ " : "") + TruncateTitle(tab.title);
+      rt.title_btn = CefLabelButton::CreateLabelButton(this, display_title);
+      rt.title_btn->SetID(kIdTabBase + tab.id);
+      rt.title_btn->SetTooltipText(tab.title.empty() ? tab.url : tab.title + " — " + tab.url);
+      rt.title_btn->SetMinimumSize(CefSize(60, 28));
+      rt.title_btn->SetMaximumSize(CefSize(200, 28));
+
+      rt.close_btn = CefLabelButton::CreateLabelButton(this, "×");
+      rt.close_btn->SetID(kIdCloseBase + tab.id);
+      rt.close_btn->SetTooltipText("Close tab");
+      rt.close_btn->SetMinimumSize(CefSize(22, 28));
+
+      if (tab.is_active) {
+        rt.title_btn->SetEnabledTextColors(kTextWhite);
+        rt.title_btn->SetBackgroundColor(kActiveTabBg);
+        rt.close_btn->SetEnabledTextColors(kTextMuted);
+        rt.close_btn->SetBackgroundColor(kActiveTabBg);
+      } else {
+        rt.title_btn->SetEnabledTextColors(kTextMuted);
+        rt.title_btn->SetBackgroundColor(kInactiveTabBg);
+        rt.close_btn->SetEnabledTextColors(kTextDim);
+        rt.close_btn->SetBackgroundColor(kInactiveTabBg);
+      }
+
+      tabs_container_->AddChildView(rt.title_btn);
+      tabs_container_->AddChildView(rt.close_btn);
+      rendered_tabs_.push_back(rt);
     }
 
-    tabs_container_->AddChildView(rt.title_btn);
-    tabs_container_->AddChildView(rt.close_btn);
-    rendered_tabs_.push_back(rt);
-  }
+    if (tab_strip_row_) {
+      tab_strip_row_->Layout();
+    }
+  } else {
+    for (size_t i = 0; i < tabs.size(); ++i) {
+      const TabSummary& tab = tabs[i];
+      RenderedTab& rt = rendered_tabs_[i];
 
-  if (tab_strip_row_) {
-    tab_strip_row_->Layout();
+      std::string display_title = (tab.is_loading ? "⏳ " : "") + TruncateTitle(tab.title);
+      rt.title_btn->SetText(display_title);
+      rt.title_btn->SetTooltipText(tab.title.empty() ? tab.url : tab.title + " — " + tab.url);
+
+      if (tab.is_active) {
+        rt.title_btn->SetEnabledTextColors(kTextWhite);
+        rt.title_btn->SetBackgroundColor(kActiveTabBg);
+        rt.close_btn->SetEnabledTextColors(kTextMuted);
+        rt.close_btn->SetBackgroundColor(kActiveTabBg);
+      } else {
+        rt.title_btn->SetEnabledTextColors(kTextMuted);
+        rt.title_btn->SetBackgroundColor(kInactiveTabBg);
+        rt.close_btn->SetEnabledTextColors(kTextDim);
+        rt.close_btn->SetBackgroundColor(kInactiveTabBg);
+      }
+    }
   }
 }
 

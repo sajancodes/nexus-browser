@@ -51,6 +51,7 @@ class NativeChrome final : public CefButtonDelegate, public CefTextfieldDelegate
 
   BrowserWindow* const owner_;
   CefRefPtr<CefPanel> tab_strip_row_;
+  CefRefPtr<CefBoxLayout> tab_strip_layout_;
   CefRefPtr<CefPanel> tabs_container_;
   CefRefPtr<CefBoxLayout> tabs_layout_;
   CefRefPtr<CefPanel> toolbar_row_;
